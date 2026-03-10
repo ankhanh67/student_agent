@@ -1,31 +1,37 @@
+# app/services/nganh_service.py
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+from app import schemas
+from app.repositories.nganh_repository import NganhRepository
 
-from app import models, schemas
-from app.repositories import nganh_repository
-from app.services.id_generator import next_code
-
-
-def list_nganh(db: Session) -> List[schemas.NganhOut]:
-    return nganh_repository.get_all(db)
-
-
-def get_nganh(db: Session, id_nganh: str):
-    return nganh_repository.get_by_id(db, id_nganh)
-
-
-def get_nganh_by_khoa(db: Session, id_khoa: str) -> List[schemas.NganhOut]:
-    return nganh_repository.get_by_khoa(db, id_khoa)
-
-
-def create_nganh(db: Session, data: schemas.NganhCreate):
-    id_nganh = data.id_nganh or next_code(db, model=models.Nganh, id_attr="id_nganh", prefix="NGANH")
-    return nganh_repository.create(db, id_nganh=id_nganh, data=data)
-
-
-def update_nganh(db: Session, id_nganh: str, data: schemas.NganhUpdate):
-    return nganh_repository.update(db, id_nganh, data)
-
-
-def delete_nganh(db: Session, id_nganh: str) -> bool:
-    return nganh_repository.delete(db, id_nganh)
+class NganhService:
+    
+    def __init__(self, db: Session):
+        self.repo = NganhRepository(db)
+    
+    def get_all_nganh(self) -> List[schemas.Nganh]:
+        nganh_list = self.repo.get_all()
+        return [schemas.Nganh.model_validate(n) for n in nganh_list]
+    
+    def get_nganh_by_id(self, id_nganh: str) -> Optional[schemas.Nganh]:
+        nganh = self.repo.get_by_id(id_nganh)
+        if nganh:
+            return schemas.Nganh.model_validate(nganh)
+        return None
+    
+    def get_nganh_by_khoa(self, id_khoa: str) -> List[schemas.Nganh]:
+        nganh_list = self.repo.get_by_khoa(id_khoa)
+        return [schemas.Nganh.model_validate(n) for n in nganh_list]
+    
+    def create_nganh(self, data: schemas.NganhCreate) -> schemas.Nganh:
+        nganh = self.repo.create(data)
+        return schemas.Nganh.model_validate(nganh)
+    
+    def update_nganh(self, id_nganh: str, data: schemas.NganhUpdate) -> Optional[schemas.Nganh]:
+        nganh = self.repo.update(id_nganh, data)
+        if nganh:
+            return schemas.Nganh.model_validate(nganh)
+        return None
+    
+    def delete_nganh(self, id_nganh: str) -> bool:
+        return self.repo.delete(id_nganh)

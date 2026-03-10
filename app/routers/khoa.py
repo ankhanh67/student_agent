@@ -1,52 +1,60 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+# app/routers/khoa.py
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-
 from app.database import get_db
 from app import schemas
-from app.services import khoa_service
+from app.services.khoa_service import KhoaService
 
 router = APIRouter(prefix="/khoa", tags=["Khoa"])
 
+def get_khoa_service(db: Session = Depends(get_db)):
+    return KhoaService(db)
 
-@router.get("/", response_model=List[schemas.KhoaOut])
-def list_khoa(db: Session = Depends(get_db)):
-    return khoa_service.list_khoa(db)
+@router.post("/", response_model=schemas.Khoa)
+def create_khoa(
+    khoa: schemas.KhoaCreate,
+    service: KhoaService = Depends(get_khoa_service)
+):
+    """Tạo khoa mới"""
+    return service.create_khoa(khoa)
 
+@router.get("/", response_model=List[schemas.Khoa])
+def read_all_khoa(
+    service: KhoaService = Depends(get_khoa_service)
+):
+    """Lấy danh sách tất cả khoa"""
+    return service.get_all_khoa()
 
-@router.get("/{id_khoa}", response_model=schemas.KhoaOut)
-def get_khoa(id_khoa: str, db: Session = Depends(get_db)):
-    khoa = khoa_service.get_khoa(db, id_khoa)
+@router.get("/{id_khoa}", response_model=schemas.Khoa)
+def read_khoa(
+    id_khoa: str,
+    service: KhoaService = Depends(get_khoa_service)
+):
+    """Lấy thông tin khoa theo ID"""
+    khoa = service.get_khoa_by_id(id_khoa)
     if not khoa:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy khoa",
-        )
+        raise HTTPException(status_code=404, detail="Không tìm thấy khoa")
     return khoa
 
+@router.put("/{id_khoa}", response_model=schemas.Khoa)
+def update_khoa(
+    id_khoa: str,
+    khoa: schemas.KhoaUpdate,
+    service: KhoaService = Depends(get_khoa_service)
+):
+    """Cập nhật thông tin khoa"""
+    updated = service.update_khoa(id_khoa, khoa)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Không tìm thấy khoa")
+    return updated
 
-@router.post("/", response_model=schemas.KhoaOut, status_code=status.HTTP_201_CREATED)
-def create_khoa(data: schemas.KhoaCreate, db: Session = Depends(get_db)):
-    return khoa_service.create_khoa(db, data)
-
-
-@router.put("/{id_khoa}", response_model=schemas.KhoaOut)
-def update_khoa(id_khoa: str, data: schemas.KhoaUpdate, db: Session = Depends(get_db)):
-    khoa = khoa_service.update_khoa(db, id_khoa, data)
-    if not khoa:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy khoa",
-        )
-    return khoa
-
-
-@router.delete("/{id_khoa}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_khoa(id_khoa: str, db: Session = Depends(get_db)):
-    ok = khoa_service.delete_khoa(db, id_khoa)
-    if not ok:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Không tìm thấy khoa",
-        )
-    return
+@router.delete("/{id_khoa}")
+def delete_khoa(
+    id_khoa: str,
+    service: KhoaService = Depends(get_khoa_service)
+):
+    """Xóa khoa"""
+    if not service.delete_khoa(id_khoa):
+        raise HTTPException(status_code=404, detail="Không tìm thấy khoa")
+    return {"message": "Đã xóa khoa thành công"}

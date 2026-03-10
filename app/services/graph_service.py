@@ -97,7 +97,7 @@ workflow.add_node("n7", node_7_generate_answer)
 
 workflow.set_entry_point("n1")
 workflow.add_edge("n1", "n2")
-workflow.add_edge("n2", "n4") # Nối thẳng sang Execute
+workflow.add_edge("n2", "n4") 
 
 # Điều hướng dựa trên kết quả thực thi
 workflow.add_conditional_edges(

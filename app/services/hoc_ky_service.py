@@ -1,31 +1,39 @@
+# app/services/hoc_ky_service.py
 from sqlalchemy.orm import Session
-from typing import List
-
+from typing import List, Optional
 from app import schemas
-from app.repositories import hoc_ky_repository
+from app.repositories.hoc_ky_repository import HocKyRepository
 
-
-def list_hoc_ky(db: Session) -> List[schemas.HocKyOut]:
-    return hoc_ky_repository.get_all(db)
-
-
-def get_hoc_ky(db: Session, id_hocky: str):
-    return hoc_ky_repository.get_by_id(db, id_hocky)
-
-
-def create_hoc_ky(db: Session, data: schemas.HocKyCreate):
-    id_hocky = data.id_hocky
-    if not id_hocky:
-        # ví dụ: namHoc="2024-2025", kyHoc="1" -> "HK20242025_1"
-        nam = data.namHoc.replace("-", "").replace(" ", "")
-        ky = str(data.kyHoc).strip()
-        id_hocky = f"HK{nam}_{ky}"
-    return hoc_ky_repository.create(db, id_hocky=id_hocky, data=data)
-
-
-def update_hoc_ky(db: Session, id_hocky: str, data: schemas.HocKyUpdate):
-    return hoc_ky_repository.update(db, id_hocky, data)
-
-
-def delete_hoc_ky(db: Session, id_hocky: str) -> bool:
-    return hoc_ky_repository.delete(db, id_hocky)
+class HocKyService:
+    
+    def __init__(self, db: Session):
+        self.repo = HocKyRepository(db)
+    
+    def get_all_hoc_ky(self) -> List[schemas.HocKy]:
+        hk_list = self.repo.get_all()
+        return [schemas.HocKy.model_validate(h) for h in hk_list]
+    
+    def get_hoc_ky_by_id(self, id_hoc_ky: str) -> Optional[schemas.HocKy]:
+        hk = self.repo.get_by_id(id_hoc_ky)
+        if hk:
+            return schemas.HocKy.model_validate(hk)
+        return None
+    
+    def get_hoc_ky_hien_tai(self) -> Optional[schemas.HocKy]:
+        hk = self.repo.get_hoc_ky_hien_tai()
+        if hk:
+            return schemas.HocKy.model_validate(hk)
+        return None
+    
+    def create_hoc_ky(self, data: schemas.HocKyCreate) -> schemas.HocKy:
+        hk = self.repo.create(data)
+        return schemas.HocKy.model_validate(hk)
+    
+    def update_hoc_ky(self, id_hoc_ky: str, data: schemas.HocKyUpdate) -> Optional[schemas.HocKy]:
+        hk = self.repo.update(id_hoc_ky, data)
+        if hk:
+            return schemas.HocKy.model_validate(hk)
+        return None
+    
+    def delete_hoc_ky(self, id_hoc_ky: str) -> bool:
+        return self.repo.delete(id_hoc_ky)

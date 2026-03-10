@@ -1,159 +1,231 @@
-from datetime import date
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
+from datetime import date
 
-from pydantic import BaseModel, EmailStr
-from pydantic import ConfigDict
-
-
-class ORMModel(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-
-# ---------- KHOA ----------
-
+# ------------------- Khoa -------------------
 class KhoaBase(BaseModel):
-    tenKhoa: str
-
+    id_khoa: str
+    ten_khoa: str
 
 class KhoaCreate(KhoaBase):
-    id_khoa: Optional[str] = None
-
+    pass
 
 class KhoaUpdate(BaseModel):
-    tenKhoa: Optional[str] = None
+    ten_khoa: Optional[str] = None
 
+class Khoa(KhoaBase):
+    class Config:
+        from_attributes = True
 
-class KhoaOut(ORMModel, KhoaBase):
-    id_khoa: str
-
-
-# ---------- NGANH ----------
-
+# ------------------- Nganh -------------------
 class NganhBase(BaseModel):
-    tenNganh: str
+    id_nganh: str
+    ten_nganh: str
     id_khoa: str
-
 
 class NganhCreate(NganhBase):
-    id_nganh: Optional[str] = None
-
+    pass
 
 class NganhUpdate(BaseModel):
-    tenNganh: Optional[str] = None
+    ten_nganh: Optional[str] = None
     id_khoa: Optional[str] = None
 
+class Nganh(NganhBase):
+    class Config:
+        from_attributes = True
 
-class NganhOut(ORMModel, NganhBase):
-    id_nganh: str
-
-
-# ---------- SINH VIEN ----------
-
-class SinhVienBase(BaseModel):
-    hoTen: str
-    ngaySinh: Optional[date] = None
-    gioiTinh: Optional[str] = None
-    email: Optional[EmailStr] = None
-    soDienthoai: Optional[str] = None
-    diaChi: Optional[str] = None
-    id_nganh: str
-
-
-class SinhVienCreate(SinhVienBase):
-    id_sinh_vien: Optional[str] = None
-
-
-class SinhVienUpdate(BaseModel):
-    hoTen: Optional[str] = None
-    ngaySinh: Optional[date] = None
-    gioiTinh: Optional[str] = None
-    email: Optional[EmailStr] = None
-    soDienthoai: Optional[str] = None
-    diaChi: Optional[str] = None
-    id_nganh: Optional[str] = None
-
-
-class SinhVienOut(ORMModel, SinhVienBase):
-    id_sinh_vien: str
-
-
-# ---------- MON HOC ----------
-
-class MonHocBase(BaseModel):
-    tenMon: str
-    soTinchi: int
-    loaiMon: Optional[str] = None
-
-
-class MonHocCreate(MonHocBase):
-    id_mon_hoc: Optional[str] = None
-
-
-class MonHocUpdate(BaseModel):
-    tenMon: Optional[str] = None
-    soTinchi: Optional[int] = None
-    loaiMon: Optional[str] = None
-
-
-class MonHocOut(ORMModel, MonHocBase):
-    id_mon_hoc: str
-
-
-# ---------- HOC KY ----------
-
-class HocKyBase(BaseModel):
-    tenHocky: str
-    namHoc: str
-    kyHoc: str
-
-
-class HocKyCreate(HocKyBase):
-    id_hocky: Optional[str] = None
-
-
-class HocKyUpdate(BaseModel):
-    tenHocky: Optional[str] = None
-    namHoc: Optional[str] = None
-    kyHoc: Optional[str] = None
-
-
-class HocKyOut(ORMModel, HocKyBase):
-    id_hocky: str
-
-
-# ---------- FACT DIEM ----------
-
-class FactDiemBase(BaseModel):
-    id_sinh_vien: str
-    id_mon_hoc: str
+# ------------------- LopHoc -------------------
+class LopHocBase(BaseModel):
+    id_lop: str
+    ten_lop: str
+    khoa_hoc: Optional[str] = None
+    nam_nhap_hoc: Optional[int] = None
+    si_so_toi_da: Optional[int] = 50
     id_khoa: str
     id_nganh: str
-    id_hocky: str
 
-    diemHe10: Optional[float] = None
-    diemChu: Optional[str] = None
-    soLanHoc: Optional[int] = 1
-    soTinChiDat: Optional[int] = None
-    ketQua: Optional[bool] = None
+class LopHocCreate(LopHocBase):
+    pass
 
-
-class FactDiemCreate(FactDiemBase):
-    id: Optional[str] = None
-
-
-class FactDiemUpdate(BaseModel):
-    id_sinh_vien: Optional[str] = None
-    id_mon_hoc: Optional[str] = None
+class LopHocUpdate(BaseModel):
+    ten_lop: Optional[str] = None
+    khoa_hoc: Optional[str] = None
+    nam_nhap_hoc: Optional[int] = None
+    si_so_toi_da: Optional[int] = None
     id_khoa: Optional[str] = None
     id_nganh: Optional[str] = None
-    id_hocky: Optional[str] = None
 
-    diemHe10: Optional[float] = None
-    diemChu: Optional[str] = None
-    soLanHoc: Optional[int] = None
-    soTinChiDat: Optional[int] = None
-    ketQua: Optional[bool] = None
+class LopHoc(LopHocBase):
+    class Config:
+        from_attributes = True
 
+# ------------------- SinhVien -------------------
+class SinhVienBase(BaseModel):
+    id_sinh_vien: str
+    ho_ten: str
+    ngay_sinh: Optional[date] = None
+    gioi_tinh: Optional[str] = None
+    email: Optional[EmailStr] = None
+    so_dien_thoai: Optional[str] = None
+    dia_chi: Optional[str] = None
+    id_nganh: str
+    id_lop: str
 
-class FactDiemOut(ORMModel, FactDiemBase):
-    id: str
+class SinhVienCreate(SinhVienBase):
+    pass
+
+class SinhVienUpdate(BaseModel):
+    ho_ten: Optional[str] = None
+    ngay_sinh: Optional[date] = None
+    gioi_tinh: Optional[str] = None
+    email: Optional[EmailStr] = None
+    so_dien_thoai: Optional[str] = None
+    dia_chi: Optional[str] = None
+    id_nganh: Optional[str] = None
+    id_lop: Optional[str] = None
+
+class SinhVien(SinhVienBase):
+    class Config:
+        from_attributes = True
+
+# ------------------- GiangVien -------------------
+class GiangVienBase(BaseModel):
+    id_giang_vien: str
+    ho_ten: str
+    email: Optional[EmailStr] = None
+    so_dien_thoai: Optional[str] = None
+    hoc_ham: Optional[str] = None
+    id_khoa: str
+
+class GiangVienCreate(GiangVienBase):
+    pass
+
+class GiangVienUpdate(BaseModel):
+    ho_ten: Optional[str] = None
+    email: Optional[EmailStr] = None
+    so_dien_thoai: Optional[str] = None
+    hoc_ham: Optional[str] = None
+    id_khoa: Optional[str] = None
+
+class GiangVien(GiangVienBase):
+    class Config:
+        from_attributes = True
+
+# ------------------- MonHoc -------------------
+class MonHocBase(BaseModel):
+    id_mon_hoc: str
+    ten_mon: str
+    so_tin_chi: int
+    loai_mon: Optional[str] = None
+    mo_ta: Optional[str] = None
+    he_so: Optional[float] = 1.0
+    id_mon_tien_quyet: Optional[str] = None
+
+class MonHocCreate(MonHocBase):
+    pass
+
+class MonHocUpdate(BaseModel):
+    ten_mon: Optional[str] = None
+    so_tin_chi: Optional[int] = None
+    loai_mon: Optional[str] = None
+    mo_ta: Optional[str] = None
+    he_so: Optional[float] = None
+    id_mon_tien_quyet: Optional[str] = None
+
+class MonHoc(MonHocBase):
+    class Config:
+        from_attributes = True
+
+# ------------------- HocKy -------------------
+class HocKyBase(BaseModel):
+    id_hoc_ky: str
+    ten_hoc_ky: str
+    nam_hoc: str
+    ky_hoc: str
+
+class HocKyCreate(HocKyBase):
+    pass
+
+class HocKyUpdate(BaseModel):
+    ten_hoc_ky: Optional[str] = None
+    nam_hoc: Optional[str] = None
+    ky_hoc: Optional[str] = None
+
+class HocKy(HocKyBase):
+    class Config:
+        from_attributes = True
+
+# ------------------- LopMonHoc -------------------
+class LopMonHocBase(BaseModel):
+    id_lop_mon: str
+    id_mon_hoc: str
+    id_giang_vien: str
+    id_hoc_ky: str
+    si_so_toi_da: Optional[int] = 50
+    phong_hoc: Optional[str] = None
+    lich_hoc: Optional[str] = None
+
+class LopMonHocCreate(LopMonHocBase):
+    pass
+
+class LopMonHocUpdate(BaseModel):
+    si_so_toi_da: Optional[int] = None
+    phong_hoc: Optional[str] = None
+    lich_hoc: Optional[str] = None
+
+class LopMonHoc(LopMonHocBase):
+    class Config:
+        from_attributes = True
+
+# ------------------- DangKyMon -------------------
+class DangKyMonBase(BaseModel):
+    id_dang_ky: str
+    id_sinh_vien: str
+    id_lop_mon: str
+    ngay_dang_ky: date
+    trang_thai: Optional[str] = 'Đã duyệt'
+
+class DangKyMonCreate(DangKyMonBase):
+    pass
+
+class DangKyMonUpdate(BaseModel):
+    trang_thai: Optional[str] = None
+
+class DangKyMon(DangKyMonBase):
+    class Config:
+        from_attributes = True
+
+# ------------------- FactDiem (QUAN TRỌNG NHẤT) -------------------
+class FactDiemBase(BaseModel):
+    id_diem: str
+    id_dang_ky: str
+    id_sinh_vien: str
+    id_mon_hoc: str
+    id_lop_mon: str
+    id_giang_vien: str
+    id_hoc_ky: str
+    diem_chuyen_can: Optional[float] = None
+    diem_giua_ky: Optional[float] = None
+    diem_cuoi_ky: Optional[float] = None
+    diem_trung_binh: Optional[float] = None
+    diem_chu: Optional[str] = None
+    so_lan_hoc: Optional[int] = 1
+    so_tin_chi_dat: Optional[int] = 0
+    ket_qua: Optional[bool] = None
+
+class FactDiemCreate(FactDiemBase):
+    pass
+
+class FactDiemUpdate(BaseModel):
+    diem_chuyen_can: Optional[float] = None
+    diem_giua_ky: Optional[float] = None
+    diem_cuoi_ky: Optional[float] = None
+    diem_trung_binh: Optional[float] = None
+    diem_chu: Optional[str] = None
+    so_lan_hoc: Optional[int] = None
+    so_tin_chi_dat: Optional[int] = None
+    ket_qua: Optional[bool] = None
+
+class FactDiem(FactDiemBase):
+    class Config:
+        from_attributes = True
