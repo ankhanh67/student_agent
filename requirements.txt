@@ -1,10 +1,31 @@
+streamlit
+
+# API
+fastapi>=0.115.0
 uvicorn[standard]==0.24.0
+
+# Database
 sqlalchemy==2.0.23
-psycopg2-binary==2.9.9
+psycopg[binary]
+
+# Data + chart
+pandas
+matplotlib
+openpyxl==3.1.2
+
+# AI / Agent
+langchain
+langgraph
+langchain-core
+langchain-community
+
+# LLM (Google)
+google-generativeai
+
+# Utils
 python-dotenv==1.0.0
 email-validator
-pandas
 python-multipart
-openpyxl==3.1.2
+
+# Validation
 pydantic>=2.10.0
-fastapi>=0.115.0
