@@ -1,29 +1,60 @@
 from langchain_core.tools import tool
-from sqlalchemy import inspect
+from sqlalchemy import text
 from app.database import SessionLocal
-from app.services.ai_tools import execute_read_only_query
+from datetime import date, datetime
 
-@tool
-def get_database_schema() -> str:
+
+def execute_read_only_query(sql_query: str):
     """
-    Tra cứu cấu trúc Database. Trả về tên bảng và tên các cột thực tế. 
-    Sử dụng công cụ này đầu tiên để tránh lỗi sai tên cột (như tenNganh vs tennganh).
+    Thực thi truy vấn SQL chỉ đọc (SELECT).
     """
+
+    # chỉ cho phép SELECT
+    if not sql_query.strip().lower().startswith("select"):
+        return "Lỗi: Chỉ cho phép câu lệnh SELECT."
+
     db = SessionLocal()
+
     try:
-        inspector = inspect(db.bind)
-        schema_info = "Cấu trúc Database hiện tại:\n"
-        for table in ["khoa", "nganh", "sinh_vien", "mon_hoc", "hoc_ky", "fact_diem"]:
-            columns = [c["name"] for c in inspector.get_columns(table)]
-            schema_info += f"- Bảng '{table}': [{', '.join(columns)}]\n"
-        return schema_info
+        clean_query = sql_query.strip().rstrip(";")
+
+        result = db.execute(text(clean_query))
+
+        columns = result.keys()
+        rows = result.fetchall()
+
+        if not rows:
+            return "Không tìm thấy dữ liệu phù hợp."
+
+        data = []
+
+        for row in rows:
+            row_dict = dict(zip(columns, row))
+
+            for k, v in row_dict.items():
+                if isinstance(v, (date, datetime)):
+                    row_dict[k] = v.isoformat()
+
+            data.append(row_dict)
+
+        # nếu chỉ có 1 giá trị
+        if len(data) == 1 and len(columns) == 1:
+            val = list(data[0].values())[0]
+            return f"Kết quả: {val}"
+
+        return data
+
+    except Exception as e:
+        return f"Lỗi thực thi SQL: {str(e)}"
+
     finally:
         db.close()
+
 
 @tool
 def db_query_tool(sql_query: str) -> str:
     """
-    Thực thi câu lệnh SQL SELECT đã được chuẩn hóa. 
-    Chỉ nhận vào câu lệnh SELECT, không nhận các lệnh thay đổi dữ liệu.
+    Thực thi câu lệnh SQL SELECT.
     """
+
     return str(execute_read_only_query(sql_query))
