@@ -3,7 +3,6 @@ import io
 import ast
 import base64
 import pandas as pd
-import matplotlib.pyplot as plt
 from typing import Annotated, List
 from typing_extensions import TypedDict
 from datetime import date, datetime
@@ -21,7 +20,11 @@ from langchain_core.tools import tool
 from langchain.chat_models import init_chat_model
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-
+from langgraph.checkpoint.memory import MemorySaver  
+import asyncio
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 # LOAD SCHEMA
 with open("app/docs/schema_database.md", "r", encoding="utf-8") as f:
     DB_SCHEMA = f.read()
@@ -105,7 +108,7 @@ class State(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     answer: str
     chart_img: str
-
+    interations : str
 llm = init_chat_model(
     "google_genai:gemini-3.1-flash-lite-preview",  
     temperature=0
@@ -160,17 +163,38 @@ class ToolNode:
             )
 
         return {"messages": outputs}
-    
+# Reflection
+async def revise_node(state: State):
+    """
+    Node này đóng vai trò 'phản tỉnh'. Nó nhìn vào kết quả của Tool 
+    để quyết định xem có cần sửa lại hay không.
+    """
+    messages = state["messages"]
+    messages.append(SystemMessage(content="Kiểm tra kết quả trên. Nếu có lỗi SQL hoặc kết quả không logic, hãy sửa lại tool call. Nếu đã ổn, hãy trả lời người dùng."))
+    response = await llm_with_tools.ainvoke(messages)
+    return {
+        "messages": [response],
+        "iterations": state.get("iterations", 0) + 1
+    }
+
 # ROUTER
-def route_tools(state: State):
+def route_tools(state:State):
+    last_message = state['messages'][-1]
+    if last_message.tool_calls:
+        return 'tools'
+    return 'final'
+def route_after_tools(state: State):
 
     last_message = state["messages"][-1]
 
+    if state.get('interations',0) >3:
+        return "final"
+    return "revise"
+def route_after_revise(state:State):
+    last_message = state['messages'][-1]
     if last_message.tool_calls:
-        return "tools"
-
-    return "final"
-
+        return 'tools'
+    return 'final'
 # FINAL NODE 
 def final_node(state: State):
     messages = state["messages"]
@@ -203,6 +227,7 @@ def build_graph():
     graph = StateGraph(State)
     graph.add_node("chatbot", chatbot_node)
     graph.add_node("tools", ToolNode(tools))
+    graph.add_node('revise', revise_node)
     graph.add_node("final", final_node)
     graph.add_edge(START, "chatbot")
     graph.add_conditional_edges(
@@ -213,8 +238,19 @@ def build_graph():
             "final": "final"
         }
     )
-    graph.add_edge("tools", "chatbot")
+    graph.add_conditional_edges(
+        "tools",
+        route_after_tools,
+        {"revise":"revise",
+         "final":"final"}
+    )
+    graph.add_conditional_edges(
+        "revise",
+        route_after_revise,
+        {"tools":"tools",
+         "final":"final"}
+    )
     graph.add_edge("final", END)
-    return graph.compile()
-
+    memory = MemorySaver()
+    return graph.compile(checkpointer=memory)
 student_graph = build_graph()
