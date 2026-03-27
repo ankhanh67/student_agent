@@ -108,7 +108,7 @@ class State(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     answer: str
     chart_img: str
-    interations : str
+    iterations : int
 llm = init_chat_model(
     "google_genai:gemini-3.1-flash-lite-preview",  
     temperature=0
@@ -121,16 +121,16 @@ async def chatbot_node(state: State):
 
     messages = state.get("messages", [])
 
-    if not messages:
-        messages = [
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content="Xin chào")
-        ]
+    if not messages or not any(isinstance(m, SystemMessage) for m in messages):
+        system_instruction = SystemMessage(content=SYSTEM_PROMPT)
+        schema_context = SystemMessage(content=f"Schema Database hiện tại:\n{DB_SCHEMA}")
+        messages = [system_instruction, schema_context] + messages
 
     response = await llm_with_tools.ainvoke(messages)
 
     return {
-        "messages": messages + [response]
+        "messages": messages + [response],
+        "iterations": 0
     }
 # TOOL NODE
 class ToolNode:
@@ -165,13 +165,11 @@ class ToolNode:
         return {"messages": outputs}
 # Reflection
 async def revise_node(state: State):
-    """
-    Node này đóng vai trò 'phản tỉnh'. Nó nhìn vào kết quả của Tool 
-    để quyết định xem có cần sửa lại hay không.
-    """
     messages = state["messages"]
-    messages.append(SystemMessage(content="Kiểm tra kết quả trên. Nếu có lỗi SQL hoặc kết quả không logic, hãy sửa lại tool call. Nếu đã ổn, hãy trả lời người dùng."))
-    response = await llm_with_tools.ainvoke(messages)
+    messages_to_llm = state["messages"] + [
+        SystemMessage(content="Kiểm tra kết quả trên. Nếu có lỗi SQL hoặc kết quả không logic, hãy sửa lại tool call bằng công cụ. Nếu đã ổn, hãy tóm tắt và trả lời người dùng.")
+    ]
+    response = await llm_with_tools.ainvoke(messages_to_llm)
     return {
         "messages": [response],
         "iterations": state.get("iterations", 0) + 1
@@ -187,7 +185,7 @@ def route_after_tools(state: State):
 
     last_message = state["messages"][-1]
 
-    if state.get('interations',0) >3:
+    if state.get('iterations',0) >3:
         return "final"
     return "revise"
 def route_after_revise(state:State):
@@ -201,19 +199,25 @@ def final_node(state: State):
     last_msg = messages[-1]
     answer = ""
     chart_img = ""
-    if isinstance(last_msg, AIMessage):
+    if state.get("iterations", 0) >= 3:
+        answer = "Hệ thống đang gặp một chút khó khăn khi trích xuất dữ liệu cho câu hỏi này. Bạn vui lòng thử lại nhé!"
+    else:    
+        if isinstance(last_msg, AIMessage):
 
-        content = last_msg.content
+            content = last_msg.content
 
-        if isinstance(content, str):
-            answer = content
+            if isinstance(content, str):
+                answer = content
 
-        elif isinstance(content, list):
-        
-            texts = [c.get("text", "") for c in content if c.get("type") == "text"]
-            answer = " ".join(texts)
+            elif isinstance(content, list):
+            
+                texts = [c.get("text", "") for c in content if c.get("type") == "text"]
+                answer = " ".join(texts)
 
     for msg in reversed(messages):
+        if isinstance(msg, HumanMessage):
+            break
+            
         if isinstance(msg, ToolMessage) and msg.name == "plot_chart_tool":
             chart_img = msg.content
             break
