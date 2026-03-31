@@ -171,3 +171,11 @@ class FactDiem(Base):
     lop_mon_hoc = relationship("LopMonHoc")
     giang_vien = relationship("GiangVien")
     hoc_ky = relationship("HocKy", back_populates="fact_diems")
+
+class TaiKhoan(Base):
+    __tablename__ = "tai_khoan"
+    
+    id_tai_khoan = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(String(20), nullable=False)  

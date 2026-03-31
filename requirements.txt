@@ -1,31 +1,20 @@
 streamlit
-
-# API
 fastapi>=0.115.0
 uvicorn[standard]==0.24.0
-
-# Database
 sqlalchemy==2.0.23
 psycopg[binary]
-
-# Data + chart
 pandas
 matplotlib
 openpyxl==3.1.2
-
-# AI / Agent
 langchain
 langgraph
 langchain-core
 langchain-community
-
-# LLM (Google)
 google-generativeai
-
-# Utils
 python-dotenv==1.0.0
 email-validator
 python-multipart
-
-# Validation
 pydantic>=2.10.0
+python-jose[cryptography]
+passlib[bcrypt] 
+python-multipart

@@ -1,4 +1,3 @@
-import os
 import io
 import ast
 import base64
@@ -109,6 +108,8 @@ class State(TypedDict):
     answer: str
     chart_img: str
     iterations : int
+    user_role: str
+    user_id: str
 llm = init_chat_model(
     "google_genai:gemini-3.1-flash-lite-preview",  
     temperature=0
@@ -118,19 +119,49 @@ tools = [db_query_tool, plot_chart_tool]
 llm_with_tools = llm.bind_tools(tools)
 # CHATBOT NODE
 async def chatbot_node(state: State):
-
     messages = state.get("messages", [])
+    
+    # Lấy thông tin người dùng từ State
+    user_role = state.get("user_role", "Khach") 
+    user_id = state.get("user_id", "")
 
-    if not messages or not any(isinstance(m, SystemMessage) for m in messages):
-        system_instruction = SystemMessage(content=SYSTEM_PROMPT)
-        schema_context = SystemMessage(content=f"Schema Database hiện tại:\n{DB_SCHEMA}")
-        messages = [system_instruction, schema_context] + messages
+    # 1. 🛡️ XÂY DỰNG LỆNH TỐI CAO (Động theo từng User)
+    security_rules = ""
+    if user_role == "SinhVien":
+        security_rules = f"""
+        [LỆNH TỐI CAO - BẢO MẬT HỆ THỐNG]
+        Người dùng hiện tại là SINH VIÊN, mã số: '{user_id}'.
+        1. Bạn BẮT BUỘC chèn điều kiện `id_sinh_vien = '{user_id}'` vào MỌI CÂU LỆNH SQL mà bạn sinh ra.
+        2. NẾU người dùng yêu cầu thông tin (tên, điểm, mã, sđt...) của BẤT KỲ AI KHÁC ngoài '{user_id}', BẠN PHẢI TỪ CHỐI NGAY LẬP TỨC và KHÔNG được sinh ra câu lệnh SQL.
+        3. Câu trả lời mẫu khi từ chối: "Xin lỗi, vì lý do bảo mật, bạn chỉ được phép truy cập dữ liệu của chính mình (Mã: {user_id})."
+        """
+    elif user_role == "GiangVien":
+        security_rules = f"""
+        [LỆNH TỐI CAO - BẢO MẬT HỆ THỐNG]
+        Người dùng hiện tại là GIẢNG VIÊN, mã số: '{user_id}'.
+        1. BẠN BẮT BUỘC PHẢI THÊM ĐIỀU KIỆN `id_giang_vien = '{user_id}'` vào TẤT CẢ các truy vấn SQL (JOIN nếu cần).
+        2. TUYỆT ĐỐI TỪ CHỐI cung cấp dữ liệu của các lớp học phần do giảng viên khác phụ trách.
+        """
+    else:
+        security_rules = "Tình trạng: Admin. Bạn có toàn quyền truy vấn và thống kê mọi dữ liệu."
 
-    response = await llm_with_tools.ainvoke(messages)
+    # 2. TỔNG HỢP PROMPT HOÀN CHỈNH
+    full_system_prompt = f"{SYSTEM_PROMPT}\n\nSchema Database:\n{DB_SCHEMA}\n\n{security_rules}"
+    system_msg = SystemMessage(content=full_system_prompt)
 
+    # 3. LỌC BỎ RÁC TRONG BỘ NHỚ
+    # Xóa các SystemMessage cũ trong lịch sử để tránh AI bị bối rối/chồng chéo luật
+    filtered_messages = [m for m in messages if not isinstance(m, SystemMessage)]
+    
+    # Ép luật mới nhất lên đầu danh sách tin nhắn gửi đi
+    messages_to_llm = [system_msg] + filtered_messages
+
+    # Gọi AI
+    response = await llm_with_tools.ainvoke(messages_to_llm)
+    
     return {
-        "messages": messages + [response],
-        "iterations": 0
+        "messages": [response], # Chỉ lưu câu trả lời của AI vào State
+        "iterations": 0 
     }
 # TOOL NODE
 class ToolNode:
@@ -185,7 +216,7 @@ def route_after_tools(state: State):
 
     last_message = state["messages"][-1]
 
-    if state.get('iterations',0) >3:
+    if state.get('iterations',0) >2:
         return "final"
     return "revise"
 def route_after_revise(state:State):
@@ -199,20 +230,18 @@ def final_node(state: State):
     last_msg = messages[-1]
     answer = ""
     chart_img = ""
-    if state.get("iterations", 0) >= 3:
-        answer = "Hệ thống đang gặp một chút khó khăn khi trích xuất dữ liệu cho câu hỏi này. Bạn vui lòng thử lại nhé!"
-    else:    
-        if isinstance(last_msg, AIMessage):
+        
+    if isinstance(last_msg, AIMessage):
 
-            content = last_msg.content
+        content = last_msg.content
 
-            if isinstance(content, str):
-                answer = content
+        if isinstance(content, str):
+            answer = content
 
-            elif isinstance(content, list):
-            
-                texts = [c.get("text", "") for c in content if c.get("type") == "text"]
-                answer = " ".join(texts)
+        elif isinstance(content, list):
+        
+            texts = [c.get("text", "") for c in content if c.get("type") == "text"]
+            answer = " ".join(texts)
 
     for msg in reversed(messages):
         if isinstance(msg, HumanMessage):
