@@ -30,8 +30,8 @@ with open("app/docs/schema_database.md", "r", encoding="utf-8") as f:
 
 # SQL TOOL
 def execute_read_only_query(sql_query: str):
-    if not sql_query.strip().lower().startswith("select"):
-        return "Lỗi: Chỉ cho phép SELECT."
+    if not (sql_query.strip().lower().startswith("select") or sql_query.strip().lower().startswith("with")):
+        return "Lỗi: Chỉ cho phép SELECT và WITH ."
 
     db = SessionLocal()
 
