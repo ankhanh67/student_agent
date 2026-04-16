@@ -1,15 +1,23 @@
-# app/main.py
 from fastapi import FastAPI
 from app.database import engine, Base
 from app.routers import (
     khoa, nganh, sinh_vien, mon_hoc, hoc_ky, fact_diem,
     import_router, ai_agent_langgraph, auth
 )
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from app.services.graph_service import load_mcp_resources, mcp_exit_stack
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Đang khởi tạo kết nối MCP Server...")
+    await load_mcp_resources()
+    yield
+    await mcp_exit_stack.aclose() 
 # Tạo bảng
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Quản lý sinh viên")
+app = FastAPI(title="Quản lý sinh viên",lifespan=lifespan)
 
 # Đăng ký routers
 app.include_router(khoa.router)
@@ -30,5 +38,3 @@ def root():
             "docs": "/docs - Tài liệu API"
         }
     }
-
-# hello
