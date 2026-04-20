@@ -1,13 +1,9 @@
 import sys
 import os
 import ast
-import uuid
+import io
+import base64
 import pandas as pd
-import threading
-import http.server
-import socketserver
-import functools
-from datetime import date, datetime
 from sqlalchemy import text
 import matplotlib
 matplotlib.use('Agg')
@@ -22,38 +18,8 @@ sys.path.insert(0, PROJECT_ROOT)
 from app.database import SessionLocal
 from mcp.server.fastmcp import FastMCP
 
-# 2. CẤU HÌNH MINI FILE SERVER CHO MCP (Dùng đường dẫn tuyệt đối)
-MCP_CHART_DIR = os.path.join(CURRENT_DIR, "charts") # Tạo thư mục charts bên trong mcp_server
-os.makedirs(MCP_CHART_DIR, exist_ok=True)
-MCP_IMAGE_PORT = 8001 
-
-# THÊM CLASS NÀY: Tắt toàn bộ log của HTTP Server để không làm hỏng Stdio của MCP
-class QuietHTTPHandler(http.server.SimpleHTTPRequestHandler):
-    def log_message(self, format, *args):
-        pass # Bỏ qua, không in ra màn hình console
-
-def start_static_file_server():
-    """Chạy một HTTP Server nhỏ trên port 8001 (Chế độ im lặng)"""
-    try:
-        handler = functools.partial(QuietHTTPHandler, directory=MCP_CHART_DIR)
-        # Cho phép dùng lại port để tránh lỗi "Address already in use" khi restart
-        socketserver.TCPServer.allow_reuse_address = True 
-        
-        # Đổi "" thành "127.0.0.1" để Windows không bị nhầm lẫn
-        with socketserver.TCPServer(("127.0.0.1", MCP_IMAGE_PORT), handler) as httpd:
-            httpd.serve_forever()
-    except Exception as e:
-        # Ghi log ra file txt thay vì print để dễ debug nếu vẫn lỗi
-        error_log_path = os.path.join(PROJECT_ROOT, "mcp_server_error.log")
-        with open(error_log_path, "a") as f:
-            f.write(f"HTTP Server Error: {str(e)}\n")
-
-# Chạy File Server ở một luồng (thread) ngầm
-threading.Thread(target=start_static_file_server, daemon=True).start()
-
-
 # 3. KHỞI TẠO MCP SERVER
-mcp = FastMCP("StudentManagementMCP")
+mcp = FastMCP("StudentManagementMCP", host="127.0.0.1", port=5000)
 
 @mcp.tool()
 def execute_read_only_query(sql_query: str) -> str:
@@ -96,15 +62,17 @@ def plot_chart_tool(data: str, chart_type: str = "bar") -> str:
             plt.xticks(rotation=45, ha='right')
 
         plt.tight_layout()
-        
-        # Lưu file vào thư mục riêng của MCP Server
-        filename = f"chart_{uuid.uuid4().hex}.png"
-        filepath = os.path.join(MCP_CHART_DIR, filename)
-        plt.savefig(filepath, format="png")
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png", bbox_inches="tight")
         plt.close()
+        buf.seek(0)
+        
+        # Mã hóa hình ảnh thành chuỗi Base64
+        image_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        buf.close()
 
-        # TRẢ VỀ ĐƯỜNG DẪN MẠNG (HTTP URL)
-        return f"http://127.0.0.1:{MCP_IMAGE_PORT}/{filename}"
+        # Trả về chuỗi Base64 trực tiếp cho AI
+        return image_base64
         
     except Exception as e:
         return f"Lỗi vẽ biểu đồ: {str(e)}"
@@ -117,6 +85,8 @@ def get_db_schema() -> str:
         return f.read()
 
 if __name__ == "__main__":
-    # Đây chính là lệnh chạy STDIO để giao tiếp với Claude
-    mcp.run()
-    
+    if "--sse" in sys.argv:
+        print("🚀 Đang khởi chạy MCP Server (SSE Transport) tại http://127.0.0.1:5000/sse ...")
+        mcp.run(transport="sse")
+    else:
+        mcp.run()

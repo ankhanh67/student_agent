@@ -1,4 +1,3 @@
-import asyncio
 from typing import Annotated, List
 from typing_extensions import TypedDict
 from langchain_core.messages import BaseMessage, ToolMessage, SystemMessage, AIMessage
@@ -12,13 +11,14 @@ from app.prompts.prompts import SYSTEM_PROMPT
 # Import MCP Client & contextlib
 from contextlib import AsyncExitStack
 from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp.client.sse import sse_client
+# from mcp.client.stdio import stdio_client
 
-# Cấu hình kết nối tới MCP Server
-mcp_server_params = StdioServerParameters(
-    command="python",
-    args=["mcp_server/server.py"], 
-)
+# # Cấu hình kết nối tới MCP Server
+# mcp_server_params = StdioServerParameters(
+#     command="python",
+#     args=["mcp_server/server.py"], 
+# )
 
 # STATE
 class State(TypedDict):
@@ -36,12 +36,29 @@ DB_SCHEMA = ""
 mcp_exit_stack = AsyncExitStack()
 mcp_global_session = None
 
+# async def load_mcp_resources():
+#     """Hàm này được gọi từ app/main.py lúc startup để thiết lập kết nối duy nhất"""
+#     global DB_SCHEMA, mcp_global_session
+    
+#     # Sử dụng exit_stack để duy trì context ngầm thay vì đóng lại
+#     read, write = await mcp_exit_stack.enter_async_context(stdio_client(mcp_server_params))
+#     mcp_global_session = await mcp_exit_stack.enter_async_context(ClientSession(read, write))
+    
+#     await mcp_global_session.initialize()
+    
+#     # Tải Resource Schema một lần và lưu vào DB_SCHEMA
+#     res = await mcp_global_session.read_resource("schema://database")
+#     if res:
+#         DB_SCHEMA = res.contents[0].text
 async def load_mcp_resources():
     """Hàm này được gọi từ app/main.py lúc startup để thiết lập kết nối duy nhất"""
     global DB_SCHEMA, mcp_global_session
     
-    # Sử dụng exit_stack để duy trì context ngầm thay vì đóng lại
-    read, write = await mcp_exit_stack.enter_async_context(stdio_client(mcp_server_params))
+    # Địa chỉ của MCP Server chạy qua SSE
+    sse_url = "http://127.0.0.1:5000/sse"
+    
+    # Kết nối bằng sse_client thay vì stdio_client
+    read, write = await mcp_exit_stack.enter_async_context(sse_client(sse_url))
     mcp_global_session = await mcp_exit_stack.enter_async_context(ClientSession(read, write))
     
     await mcp_global_session.initialize()
@@ -50,7 +67,6 @@ async def load_mcp_resources():
     res = await mcp_global_session.read_resource("schema://database")
     if res:
         DB_SCHEMA = res.contents[0].text
-
 async def call_mcp_tool(tool_name: str, args: dict):
     """Proxy gọi tool qua Global Session đã kết nối (tốc độ cao)"""
     if not mcp_global_session:
@@ -66,7 +82,7 @@ async def db_query_tool(sql_query: str) -> str:
 
 @tool
 async def plot_chart_tool(data: str, chart_type: str = "bar") -> str:
-    """Vẽ chart từ data qua MCP Server. Trả về URL."""
+    """Vẽ chart từ data qua MCP Server. Trả về mã Base64 của hình ảnh."""
     return await call_mcp_tool("plot_chart_tool", {"data": data, "chart_type": chart_type})
 
 tools = [db_query_tool, plot_chart_tool]
@@ -121,10 +137,10 @@ class ToolNode:
             result = await self.tools_by_name[name].ainvoke(args)
 
             if name == "plot_chart_tool":
-                chart_url = result 
+                chart_url = result # Lúc này biến result đang chứa nguyên chuỗi Base64
                 outputs.append(
                     ToolMessage(
-                        content=f"Đã lưu biểu đồ thành công tại: {chart_url}",  
+                        content="Đã vẽ biểu đồ thành công. Đã lưu hình ảnh dưới dạng Base64 ẩn.",  
                         name=name,
                         tool_call_id=tool_call["id"],
                     )
