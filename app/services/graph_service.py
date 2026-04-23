@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated, List
 from typing_extensions import TypedDict
 from langchain_core.messages import BaseMessage, ToolMessage, SystemMessage, AIMessage
@@ -24,12 +25,12 @@ from mcp.client.sse import sse_client
 class State(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     answer: str
-    chart_url: str  # <--- Lưu URL thay vì Base64
+    chart_img: str  
     iterations : int
     user_role: str
     user_id: str
 
-llm = init_chat_model("google_genai:gemini-2.5-flash", temperature=0)
+llm = init_chat_model("google_genai:gemini-1.5-flash", temperature=0)
 
 # --- KHỞI TẠO MCP & MAP TOOLS (PERSISTENT SESSION) ---
 DB_SCHEMA = ""
@@ -127,17 +128,24 @@ class ToolNode:
 
     async def __call__(self, state: State):
         last_message = state["messages"][-1]
-        outputs = []
-        chart_url = ""
+        chart_img = ""
 
+        # Tạo danh sách các task chạy song song
+        tasks = []
         for tool_call in last_message.tool_calls:
             name = tool_call["name"]
             args = tool_call["args"]
+            tasks.append((name, tool_call, self.tools_by_name[name].ainvoke(args)))
 
-            result = await self.tools_by_name[name].ainvoke(args)
+        # Chạy tất cả tool cùng lúc
+        tool_results = await asyncio.gather(*[t[2] for t in tasks])
 
+        outputs = []
+        for i, (name, tool_call, _) in enumerate(tasks):
+            result = tool_results[i]
+            
             if name == "plot_chart_tool":
-                chart_url = result # Lúc này biến result đang chứa nguyên chuỗi Base64
+                chart_img = f"data:image/png;base64,{result}"
                 outputs.append(
                     ToolMessage(
                         content="Đã vẽ biểu đồ thành công. Đã lưu hình ảnh dưới dạng Base64 ẩn.",  
@@ -154,7 +162,7 @@ class ToolNode:
                     )
                 )
 
-        return {"messages": outputs, "chart_url": chart_url}
+        return {"messages": outputs, "chart_img": chart_img}
 
 async def revise_node(state: State):
     messages_to_llm = state["messages"] + [
@@ -168,17 +176,12 @@ def route_tools(state:State):
     return 'final'
 
 def route_after_tools(state: State):
-    if state.get('iterations',0) > 2: return "final"
-    return "revise"
-
-def route_after_revise(state:State):
-    if state['messages'][-1].tool_calls: return 'tools'
-    return 'final'
+    return "chatbot" # Quay lại chatbot để tóm tắt hoặc gọi tiếp
 
 def final_node(state: State):
     last_msg = state["messages"][-1]
     answer = ""
-    chart_url = state.get("chart_url", "")
+    chart_img = state.get("chart_img", "")
         
     if isinstance(last_msg, AIMessage):
         if isinstance(last_msg.content, str):
@@ -186,19 +189,17 @@ def final_node(state: State):
         elif isinstance(last_msg.content, list):
             answer = " ".join([c.get("text", "") for c in last_msg.content if c.get("type") == "text"])
 
-    return {"answer": answer, "chart_url": chart_url}
+    return {"answer": answer, "chart_img": chart_img}
 
 def build_graph():
     graph = StateGraph(State)
     graph.add_node("chatbot", chatbot_node)
     graph.add_node("tools", ToolNode(tools))
-    graph.add_node('revise', revise_node)
     graph.add_node("final", final_node)
     
     graph.add_edge(START, "chatbot")
     graph.add_conditional_edges("chatbot", route_tools, {"tools": "tools", "final": "final"})
-    graph.add_conditional_edges("tools", route_after_tools, {"revise":"revise", "final":"final"})
-    graph.add_conditional_edges("revise", route_after_revise, {"tools":"tools", "final":"final"})
+    graph.add_edge("tools", "chatbot") # Luôn quay lại chatbot sau khi dùng tool
     graph.add_edge("final", END)
     
     return graph.compile(checkpointer=MemorySaver())
